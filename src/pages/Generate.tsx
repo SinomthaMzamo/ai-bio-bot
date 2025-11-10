@@ -6,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, MessageSquare, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ChatMode } from "@/components/ChatMode";
 
 type ContentType = "bio" | "project" | "reflection";
 
@@ -23,6 +25,7 @@ const Generate = () => {
   const [tone, setTone] = useState<"first-person" | "third-person">("first-person");
   const [wordLimit, setWordLimit] = useState("500");
   const [formData, setFormData] = useState<FormData>({});
+  const [mode, setMode] = useState<"form" | "chat">("form");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -92,10 +95,12 @@ const Generate = () => {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+  const handleChatComplete = (chatFormData: FormData) => {
+    setFormData(chatFormData);
+    handleGenerate(chatFormData);
+  };
 
+  const handleGenerate = async (dataToGenerate: FormData) => {
     setIsLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -110,7 +115,7 @@ const Generate = () => {
           contentType: type,
           tone,
           wordLimit: parseInt(wordLimit),
-          inputData: formData
+          inputData: dataToGenerate
         }
       });
 
@@ -129,7 +134,7 @@ const Generate = () => {
           content_type: type,
           tone,
           word_limit: parseInt(wordLimit),
-          input_data: formData,
+          input_data: dataToGenerate,
           generated_content: data.content
         })
         .select()
@@ -147,6 +152,12 @@ const Generate = () => {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+    await handleGenerate(formData);
+  };
+
   return (
     <div className="min-h-screen gradient-subtle py-8">
       <div className="container mx-auto px-4 max-w-3xl">
@@ -162,7 +173,20 @@ const Generate = () => {
         <Card className="p-8">
           <h1 className="text-3xl font-bold mb-8">{getTitle()}</h1>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <Tabs value={mode} onValueChange={(v: any) => setMode(v)} className="mb-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="form">
+                <FileText className="w-4 h-4 mr-2" />
+                Form Mode
+              </TabsTrigger>
+              <TabsTrigger value="chat">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Chat Mode
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="form">
+              <form onSubmit={handleSubmit} className="space-y-6">
             {/* Tone Selection */}
             <div className="space-y-2">
               <Label>Tone</Label>
@@ -226,6 +250,44 @@ const Generate = () => {
               )}
             </Button>
           </form>
+            </TabsContent>
+
+            <TabsContent value="chat">
+              <div className="space-y-6">
+                {/* Tone Selection */}
+                <div className="space-y-2">
+                  <Label>Tone</Label>
+                  <Select value={tone} onValueChange={(value: any) => setTone(value)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="first-person">First Person (I, my, me)</SelectItem>
+                      <SelectItem value="third-person">Third Person (He, she, they)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Word Limit */}
+                <div className="space-y-2">
+                  <Label htmlFor="wordLimit">Word Limit</Label>
+                  <Input
+                    id="wordLimit"
+                    type="number"
+                    min="100"
+                    max="1000"
+                    value={wordLimit}
+                    onChange={(e) => setWordLimit(e.target.value)}
+                  />
+                </div>
+
+                <ChatMode 
+                  contentType={type!} 
+                  onComplete={handleChatComplete}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
         </Card>
       </div>
     </div>

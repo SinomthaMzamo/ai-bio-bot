@@ -2,15 +2,20 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowLeft, Download, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Download, Loader2, FileText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import jsPDF from "jspdf";
 
 interface Generation {
   id: string;
   content_type: string;
   tone: string;
+  word_limit: number;
+  input_data: any;
   generated_content: string;
   created_at: string;
 }
@@ -20,6 +25,9 @@ const Result = () => {
   const { id } = useParams();
   const [generation, setGeneration] = useState<Generation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refinementPrompt, setRefinementPrompt] = useState("");
+  const [showRefinement, setShowRefinement] = useState(false);
 
   useEffect(() => {
     const fetchGeneration = async () => {
@@ -49,6 +57,82 @@ const Result = () => {
 
     fetchGeneration();
   }, [id, navigate]);
+
+  const handleRefine = async () => {
+    if (!refinementPrompt.trim()) {
+      toast.error("Please enter refinement instructions");
+      return;
+    }
+
+    setIsRefining(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-content', {
+        body: { 
+          contentType: generation?.content_type,
+          tone: generation?.tone,
+          wordLimit: generation?.word_limit,
+          inputData: generation?.input_data,
+          refinementPrompt: refinementPrompt
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      // Update the generation with new content
+      const { error: updateError } = await supabase
+        .from('generations')
+        .update({ generated_content: data.content })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      setGeneration(prev => prev ? { ...prev, generated_content: data.content } : null);
+      setRefinementPrompt("");
+      setShowRefinement(false);
+      toast.success("Content refined successfully!");
+    } catch (error: any) {
+      console.error("Refinement error:", error);
+      toast.error(error.message || "Failed to refine content");
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    if (!generation) return;
+    
+    try {
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - 2 * margin;
+      
+      // Add title
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      const title = getTypeLabel(generation.content_type);
+      doc.text(title, margin, 20);
+      
+      // Add content
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(generation.generated_content, maxWidth);
+      doc.text(lines, margin, 35);
+      
+      // Save
+      const filename = `${generation.content_type}-${Date.now()}.pdf`;
+      doc.save(filename);
+      toast.success("PDF exported successfully!");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    }
+  };
 
   const handleDownloadMarkdown = () => {
     if (!generation) return;
@@ -117,7 +201,11 @@ const Result = () => {
             Back to Dashboard
           </Button>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={handleDownloadPDF}>
+              <Download className="w-4 h-4 mr-2" />
+              PDF
+            </Button>
             <Button variant="outline" onClick={handleDownloadMarkdown}>
               <Download className="w-4 h-4 mr-2" />
               Markdown
@@ -125,6 +213,13 @@ const Result = () => {
             <Button variant="outline" onClick={handleDownloadText}>
               <Download className="w-4 h-4 mr-2" />
               Text
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowRefinement(!showRefinement)}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refine
             </Button>
           </div>
         </div>
@@ -138,6 +233,48 @@ const Result = () => {
               <span>Generated: {new Date(generation.created_at).toLocaleDateString()}</span>
             </div>
           </div>
+
+          {showRefinement && (
+            <div className="mb-6 p-6 bg-muted rounded-lg">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="refinement" className="text-base font-semibold">Refinement Instructions</Label>
+                  <Textarea
+                    id="refinement"
+                    placeholder="E.g., Make it more professional, add more details about leadership skills, focus on technical achievements..."
+                    value={refinementPrompt}
+                    onChange={(e) => setRefinementPrompt(e.target.value)}
+                    rows={4}
+                    className="mt-2"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleRefine} disabled={isRefining}>
+                    {isRefining ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Refining...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Apply Refinement
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      setShowRefinement(false);
+                      setRefinementPrompt("");
+                    }} 
+                    variant="outline"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="prose prose-slate max-w-none">
             <ReactMarkdown>{generation.generated_content}</ReactMarkdown>

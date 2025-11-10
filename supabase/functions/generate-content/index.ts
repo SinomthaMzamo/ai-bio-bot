@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { contentType, tone, wordLimit, inputData } = await req.json();
+    const { contentType, tone, wordLimit, inputData, refinementPrompt } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
     if (!LOVABLE_API_KEY) {
@@ -23,7 +23,11 @@ serve(async (req) => {
     let systemPrompt = "";
     let userPrompt = "";
 
-    switch (contentType) {
+    if (refinementPrompt) {
+      systemPrompt = `You are a professional content editor. Take the existing content and refine it based on the user's instructions. Maintain the same approximate word count (${wordLimit} words) and ${tone} perspective.`;
+      userPrompt = `Refine the following content based on these instructions: "${refinementPrompt}"\n\nExisting content:\n${inputData.existingContent || JSON.stringify(inputData)}`;
+    } else {
+      switch (contentType) {
       case "bio":
         systemPrompt = `You are a professional content writer specializing in personal bios. Create a compelling, professional bio in ${tone} perspective. The bio should be approximately ${wordLimit} words and highlight the person's skills, experience, and achievements in a natural, engaging way.`;
         userPrompt = `Create a professional bio with the following information:
@@ -53,8 +57,9 @@ Challenges: ${inputData.challenges}
 Future Application: ${inputData.application}`;
         break;
 
-      default:
-        throw new Error('Invalid content type');
+        default:
+          throw new Error('Invalid content type');
+      }
     }
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
