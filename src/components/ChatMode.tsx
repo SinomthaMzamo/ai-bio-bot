@@ -99,61 +99,84 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
     }
   };
 
-  const validateInput = (input: string, key: string): { isValid: boolean; feedback?: string } => {
+  const validateInput = async (input: string, question: string): Promise<{ isValid: boolean; feedback?: string; acknowledgment?: string }> => {
     const trimmed = input.trim();
     
-    if (trimmed.length < 10) {
+    // Basic length check
+    if (trimmed.length < 3) {
       return { 
         isValid: false, 
-        feedback: "That seems a bit short. Could you provide more details?" 
+        feedback: "That seems too short. Could you provide more details?" 
       };
     }
     
-    // Check for placeholder-like responses
-    const placeholderPatterns = /^(test|example|sample|n\/a|na|none|idk|i don't know)$/i;
-    if (placeholderPatterns.test(trimmed)) {
-      return { 
-        isValid: false, 
-        feedback: "I need real information to help you. Please share actual details." 
-      };
+    try {
+      // AI-powered semantic validation
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-answer`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
+          },
+          body: JSON.stringify({ 
+            question,
+            answer: trimmed 
+          })
+        }
+      );
+
+      if (!response.ok) {
+        console.error('Validation failed, accepting input');
+        return { isValid: true };
+      }
+
+      const validation = await response.json();
+      return validation;
+    } catch (error) {
+      console.error('Validation error:', error);
+      // Fallback: accept input if validation service fails
+      return { isValid: true };
     }
-    
-    return { isValid: true };
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!currentInput.trim() || currentQuestionIndex >= questions.length || isSending) return;
 
     const userMessage = currentInput.trim();
     const currentKey = questions[currentQuestionIndex].key;
-    
-    // Extract name from first question
-    if (currentKey === "name" && !userName) {
-      const extractedName = userMessage.split(" ")[0];
-      setUserName(extractedName);
-    }
+    const currentQuestion = questions[currentQuestionIndex].question;
     
     setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setCurrentInput("");
     setIsSending(true);
     
-    // Validate input
-    const validation = validateInput(userMessage, currentKey);
+    // Validate input with AI
+    const validation = await validateInput(userMessage, currentQuestion);
     
-    setTimeout(() => {
-      if (!validation.isValid) {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: validation.feedback! 
-        }]);
-        setIsSending(false);
-        return;
-      }
-      
-      // Store the valid data
-      setFormData((prev: any) => ({ ...prev, [currentKey]: userMessage }));
-      
-      // Acknowledgment without repetition
+    if (!validation.isValid) {
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: validation.feedback! 
+      }]);
+      setIsSending(false);
+      return;
+    }
+    
+    // Extract name from first question if it's a name field
+    if (currentKey === "name" && !userName) {
+      const extractedName = userMessage.split(" ")[0];
+      setUserName(extractedName);
+    }
+    
+    // Store the valid data
+    setFormData((prev: any) => ({ ...prev, [currentKey]: userMessage }));
+    
+    // Use AI-provided acknowledgment or fallback to generic ones
+    let acknowledgment = validation.acknowledgment;
+    
+    if (!acknowledgment) {
       const acknowledgments = userName 
         ? [
             `Thanks, ${userName}!`,
@@ -167,12 +190,13 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
             "Great!",
             "Got it!"
           ];
-      
-      const randomAck = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
-      
+      acknowledgment = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
+    }
+    
+    setTimeout(() => {
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: randomAck
+        content: acknowledgment
       }]);
       
       setTimeout(() => {
