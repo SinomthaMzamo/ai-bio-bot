@@ -63,7 +63,12 @@ Examples:
     }
 
     const data = await response.json();
-    const validationResult = JSON.parse(data.choices[0].message.content);
+    let content = data.choices[0].message.content;
+    
+    // Strip markdown code blocks if present
+    content = content.replace(/^```json?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+    
+    const validationResult = JSON.parse(content);
 
     return new Response(JSON.stringify(validationResult), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
