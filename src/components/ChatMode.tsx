@@ -49,6 +49,8 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [formData, setFormData] = useState<any>({});
   const [isAsking, setIsAsking] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [userName, setUserName] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const questions = CHAT_QUESTIONS[contentType];
@@ -59,11 +61,20 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
         askNextQuestion();
       }, 500);
     } else if (currentQuestionIndex === questions.length && Object.keys(formData).length === questions.length) {
+      // Final confirmation message
+      const summary = Object.entries(formData)
+        .map(([key, value]) => `• ${key}: ${value}`)
+        .join("\n");
+      
+      const confirmationMessage = userName
+        ? `Perfect, ${userName}! Let me confirm what we have:\n\n${summary}\n\nLooks good? Click 'Generate Content' below!`
+        : `Perfect! Let me confirm what we have:\n\n${summary}\n\nLooks good? Click 'Generate Content' below!`;
+      
       setMessages(prev => [
         ...prev,
         { 
           role: "assistant", 
-          content: "Perfect! I have all the information I need. Click 'Generate Content' below to create your content." 
+          content: confirmationMessage
         }
       ]);
     }
@@ -88,36 +99,86 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
     }
   };
 
+  const validateInput = (input: string, key: string): { isValid: boolean; feedback?: string } => {
+    const trimmed = input.trim();
+    
+    if (trimmed.length < 10) {
+      return { 
+        isValid: false, 
+        feedback: "That seems a bit short. Could you provide more details?" 
+      };
+    }
+    
+    // Check for placeholder-like responses
+    const placeholderPatterns = /^(test|example|sample|n\/a|na|none|idk|i don't know)$/i;
+    if (placeholderPatterns.test(trimmed)) {
+      return { 
+        isValid: false, 
+        feedback: "I need real information to help you. Please share actual details." 
+      };
+    }
+    
+    return { isValid: true };
+  };
+
   const handleSend = () => {
-    if (!currentInput.trim() || currentQuestionIndex >= questions.length) return;
+    if (!currentInput.trim() || currentQuestionIndex >= questions.length || isSending) return;
 
     const userMessage = currentInput.trim();
-    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
-    
     const currentKey = questions[currentQuestionIndex].key;
-    setFormData((prev: any) => ({ ...prev, [currentKey]: userMessage }));
     
+    // Extract name from first question
+    if (currentKey === "name" && !userName) {
+      const extractedName = userMessage.split(" ")[0];
+      setUserName(extractedName);
+    }
+    
+    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
     setCurrentInput("");
+    setIsSending(true);
     
-    // Add acknowledgment message
+    // Validate input
+    const validation = validateInput(userMessage, currentKey);
+    
     setTimeout(() => {
-      const acknowledgments = [
-        "Got it! That's really helpful.",
-        "Perfect, I've noted that down.",
-        "Excellent! Thanks for sharing that.",
-        "Great! I have a clear picture now.",
-        "Wonderful! That gives me good context."
-      ];
+      if (!validation.isValid) {
+        setMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: validation.feedback! 
+        }]);
+        setIsSending(false);
+        return;
+      }
+      
+      // Store the valid data
+      setFormData((prev: any) => ({ ...prev, [currentKey]: userMessage }));
+      
+      // Acknowledgment without repetition
+      const acknowledgments = userName 
+        ? [
+            `Thanks, ${userName}!`,
+            `Perfect, ${userName}!`,
+            `Great, ${userName}!`,
+            `Got it, ${userName}!`
+          ]
+        : [
+            "Thanks for that!",
+            "Perfect!",
+            "Great!",
+            "Got it!"
+          ];
+      
       const randomAck = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
       
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: `${randomAck} Let me just confirm: "${userMessage}"`
+        content: randomAck
       }]);
       
       setTimeout(() => {
         setCurrentQuestionIndex(prev => prev + 1);
-      }, 800);
+        setIsSending(false);
+      }, 600);
     }, 400);
   };
 
@@ -160,12 +221,12 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
           <Input
             value={currentInput}
             onChange={(e) => setCurrentInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => e.key === "Enter" && !isSending && handleSend()}
             placeholder="Type your answer..."
-            disabled={isAsking}
+            disabled={isAsking || isSending}
           />
-          <Button onClick={handleSend} disabled={isAsking || !currentInput.trim()}>
-            <Send className="w-4 h-4" />
+          <Button onClick={handleSend} disabled={isAsking || isSending || !currentInput.trim()}>
+            {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </div>
       ) : (

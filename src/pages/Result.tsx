@@ -59,10 +59,7 @@ const Result = () => {
   }, [id, navigate]);
 
   const handleRefine = async () => {
-    if (!refinementPrompt.trim()) {
-      toast.error("Please enter refinement instructions");
-      return;
-    }
+    if (!refinementPrompt.trim() || isRefining) return;
 
     setIsRefining(true);
     try {
@@ -255,7 +252,7 @@ const Result = () => {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handleRefine} disabled={isRefining}>
+                  <Button onClick={handleRefine} disabled={isRefining || !refinementPrompt.trim()}>
                     {isRefining ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -274,6 +271,7 @@ const Result = () => {
                       setRefinementPrompt("");
                     }} 
                     variant="outline"
+                    disabled={isRefining}
                   >
                     Cancel
                   </Button>
