@@ -71,7 +71,9 @@ const Result = () => {
           contentType: generation?.content_type,
           tone: generation?.tone,
           wordLimit: generation?.word_limit,
-          inputData: generation?.input_data,
+          inputData: {
+            existingContent: generation?.generated_content
+          },
           refinementPrompt: refinementPrompt
         }
       });
@@ -81,6 +83,10 @@ const Result = () => {
       if (data?.error) {
         toast.error(data.error);
         return;
+      }
+
+      if (!data?.content) {
+        throw new Error("No content received from AI");
       }
 
       // Update the generation with new content

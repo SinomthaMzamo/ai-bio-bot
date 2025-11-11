@@ -98,7 +98,27 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
     setFormData((prev: any) => ({ ...prev, [currentKey]: userMessage }));
     
     setCurrentInput("");
-    setCurrentQuestionIndex(prev => prev + 1);
+    
+    // Add acknowledgment message
+    setTimeout(() => {
+      const acknowledgments = [
+        "Got it! That's really helpful.",
+        "Perfect, I've noted that down.",
+        "Excellent! Thanks for sharing that.",
+        "Great! I have a clear picture now.",
+        "Wonderful! That gives me good context."
+      ];
+      const randomAck = acknowledgments[Math.floor(Math.random() * acknowledgments.length)];
+      
+      setMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: `${randomAck} Let me just confirm: "${userMessage}"`
+      }]);
+      
+      setTimeout(() => {
+        setCurrentQuestionIndex(prev => prev + 1);
+      }, 800);
+    }, 400);
   };
 
   const handleGenerate = () => {
