@@ -80,6 +80,11 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
   const generateConfirmationSummary = async () => {
     setIsLoadingSummary(true);
     
+    // Remove any previous confirmation messages to avoid duplicates
+    setMessages(prev => prev.filter(msg => 
+      !(msg.role === "assistant" && msg.content.includes("Does this look good"))
+    ));
+    
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/summarize-info`,
@@ -228,7 +233,7 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
     
     if (currentQuestionIndex >= questions.length) return;
 
-    const userMessage = currentInput.trim();
+    let userMessage = currentInput.trim();
     const currentKey = questions[currentQuestionIndex].key;
     const currentQuestion = questions[currentQuestionIndex].question;
     
@@ -271,6 +276,36 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
         }, 400);
         return;
       }
+      
+      // Check if user wants to add to existing value or replace it
+      const additivePatterns = [
+        /\balso\b/i,
+        /\band\b/i,
+        /additionally/i,
+        /\bplus\b/i,
+        /as well/i,
+        /\btoo\b/i,
+        /furthermore/i,
+        /moreover/i
+      ];
+      
+      const replacementPatterns = [
+        /actually/i,
+        /change.*to/i,
+        /replace.*with/i,
+        /instead/i,
+        /rather than/i,
+        /not.*but/i
+      ];
+      
+      const wantsToAdd = additivePatterns.some(pattern => pattern.test(userMessage));
+      const wantsToReplace = replacementPatterns.some(pattern => pattern.test(userMessage));
+      
+      // If additive language detected and no replacement language, append to existing
+      if (wantsToAdd && !wantsToReplace) {
+        userMessage = `${formData[currentKey]}. ${userMessage}`;
+      }
+      // Otherwise replace (either explicit replacement or unclear intent)
     }
     
     // Validate input with AI
