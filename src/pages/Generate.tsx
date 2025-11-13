@@ -95,9 +95,9 @@ const Generate = () => {
     return true;
   };
 
-  const handleChatComplete = (chatFormData: FormData) => {
+  const handleChatComplete = async (chatFormData: FormData) => {
     setFormData(chatFormData);
-    handleGenerate(chatFormData);
+    await handleGenerate(chatFormData);
   };
 
   const handleGenerate = async (dataToGenerate: FormData) => {
@@ -284,6 +284,7 @@ const Generate = () => {
                 <ChatMode 
                   contentType={type!} 
                   onComplete={handleChatComplete}
+                  isGenerating={isLoading}
                 />
               </div>
             </TabsContent>

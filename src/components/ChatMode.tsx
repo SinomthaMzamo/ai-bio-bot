@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Edit2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Message {
@@ -13,6 +13,7 @@ interface Message {
 interface ChatModeProps {
   contentType: "bio" | "project" | "reflection";
   onComplete: (formData: any) => void;
+  isGenerating?: boolean;
 }
 
 const CHAT_QUESTIONS = {
@@ -38,7 +39,7 @@ const CHAT_QUESTIONS = {
   ]
 };
 
-export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
+export const ChatMode = ({ contentType, onComplete, isGenerating = false }: ChatModeProps) => {
   const [messages, setMessages] = useState<Message[]>([
     { 
       role: "assistant", 
@@ -51,7 +52,10 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
   const [isAsking, setIsAsking] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [userName, setUserName] = useState<string>("");
+  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const [showRefinement, setShowRefinement] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const questions = CHAT_QUESTIONS[contentType];
 
@@ -60,23 +64,9 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
       setTimeout(() => {
         askNextQuestion();
       }, 500);
-    } else if (currentQuestionIndex === questions.length && Object.keys(formData).length === questions.length) {
-      // Final confirmation message
-      const summary = Object.entries(formData)
-        .map(([key, value]) => `• ${key}: ${value}`)
-        .join("\n");
-      
-      const confirmationMessage = userName
-        ? `Perfect, ${userName}! Let me confirm what we have:\n\n${summary}\n\nLooks good? Click 'Generate Content' below!`
-        : `Perfect! Let me confirm what we have:\n\n${summary}\n\nLooks good? Click 'Generate Content' below!`;
-      
-      setMessages(prev => [
-        ...prev,
-        { 
-          role: "assistant", 
-          content: confirmationMessage
-        }
-      ]);
+    } else if (currentQuestionIndex === questions.length && Object.keys(formData).length === questions.length && !showRefinement) {
+      // Generate natural summary using AI
+      generateConfirmationSummary();
     }
   }, [currentQuestionIndex]);
 
@@ -85,6 +75,67 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const generateConfirmationSummary = async () => {
+    setIsLoadingSummary(true);
+    
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/summarize-info`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
+          },
+          body: JSON.stringify({ 
+            formData,
+            contentType 
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to generate summary');
+      }
+
+      const { summary } = await response.json();
+      
+      const confirmationMessage = userName
+        ? `Perfect, ${userName}! Let me confirm what we have:\n\n${summary}\n\nDoes this look good, or would you like to refine anything?`
+        : `Perfect! Let me confirm what we have:\n\n${summary}\n\nDoes this look good, or would you like to refine anything?`;
+      
+      setMessages(prev => [
+        ...prev,
+        { 
+          role: "assistant", 
+          content: confirmationMessage
+        }
+      ]);
+      setShowRefinement(true);
+    } catch (error) {
+      console.error('Summary generation error:', error);
+      // Fallback to simple summary
+      const summary = Object.entries(formData)
+        .map(([key, value]) => `• ${key}: ${value}`)
+        .join("\n");
+      
+      const confirmationMessage = userName
+        ? `Perfect, ${userName}! Let me confirm what we have:\n\n${summary}\n\nDoes this look good, or would you like to refine anything?`
+        : `Perfect! Let me confirm what we have:\n\n${summary}\n\nDoes this look good, or would you like to refine anything?`;
+      
+      setMessages(prev => [
+        ...prev,
+        { 
+          role: "assistant", 
+          content: confirmationMessage
+        }
+      ]);
+      setShowRefinement(true);
+    } finally {
+      setIsLoadingSummary(false);
+    }
+  };
 
   const askNextQuestion = () => {
     if (currentQuestionIndex < questions.length) {
@@ -96,6 +147,21 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
         ]);
         setIsAsking(false);
       }, 300);
+    }
+  };
+
+  const handleRefineField = (fieldKey: string) => {
+    const questionIndex = questions.findIndex(q => q.key === fieldKey);
+    if (questionIndex !== -1) {
+      setCurrentQuestionIndex(questionIndex);
+      setShowRefinement(false);
+      setMessages(prev => [
+        ...prev,
+        { 
+          role: "assistant", 
+          content: `Let's update that. ${questions[questionIndex].question}` 
+        }
+      ]);
     }
   };
 
@@ -141,8 +207,24 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (!isSending && currentInput.trim()) {
+        handleSend();
+      }
+    }
+  };
+
   const handleSend = async () => {
-    if (!currentInput.trim() || currentQuestionIndex >= questions.length || isSending) return;
+    if (!currentInput.trim() || isSending) return;
+    
+    // If we're in refinement mode, allow updating
+    if (showRefinement && currentQuestionIndex >= questions.length) {
+      return;
+    }
+    
+    if (currentQuestionIndex >= questions.length) return;
 
     const userMessage = currentInput.trim();
     const currentKey = questions[currentQuestionIndex].key;
@@ -240,24 +322,63 @@ export const ChatMode = ({ contentType, onComplete }: ChatModeProps) => {
         </div>
       </ScrollArea>
 
+      {isLoadingSummary && (
+        <div className="flex justify-start">
+          <Card className="bg-muted p-4">
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </Card>
+        </div>
+      )}
+
       {currentQuestionIndex < questions.length ? (
         <div className="flex gap-2 mt-4">
-          <Input
+          <Textarea
+            ref={textareaRef}
             value={currentInput}
             onChange={(e) => setCurrentInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !isSending && handleSend()}
-            placeholder="Type your answer..."
+            onKeyDown={handleKeyDown}
+            placeholder="Type your answer... (Shift+Enter for new line)"
             disabled={isAsking || isSending}
+            className="min-h-[80px] resize-none"
+            rows={3}
           />
           <Button onClick={handleSend} disabled={isAsking || isSending || !currentInput.trim()}>
             {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </Button>
         </div>
-      ) : (
-        <Button onClick={handleGenerate} size="lg" className="w-full mt-4">
-          Generate Content
-        </Button>
-      )}
+      ) : showRefinement ? (
+        <div className="space-y-3 mt-4">
+          <div className="flex flex-wrap gap-2">
+            {questions.map((q) => (
+              <Button
+                key={q.key}
+                variant="outline"
+                size="sm"
+                onClick={() => handleRefineField(q.key)}
+                className="text-xs"
+              >
+                <Edit2 className="w-3 h-3 mr-1" />
+                Edit {q.key}
+              </Button>
+            ))}
+          </div>
+          <Button 
+            onClick={handleGenerate} 
+            size="lg" 
+            className="w-full"
+            disabled={isGenerating}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              "Generate Content"
+            )}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 };
