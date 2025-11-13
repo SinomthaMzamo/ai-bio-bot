@@ -54,6 +54,7 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
   const [userName, setUserName] = useState<string>("");
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [showRefinement, setShowRefinement] = useState(false);
+  const [isEditingField, setIsEditingField] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -155,6 +156,7 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
     if (questionIndex !== -1) {
       setCurrentQuestionIndex(questionIndex);
       setShowRefinement(false);
+      setIsEditingField(true);
       setMessages(prev => [
         ...prev,
         { 
@@ -234,6 +236,43 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
     setCurrentInput("");
     setIsSending(true);
     
+    // Check if user wants to keep existing value (only when editing)
+    if (isEditingField && formData[currentKey]) {
+      const keepSamePatterns = [
+        /keep.*same/i,
+        /no.*change/i,
+        /remain.*same/i,
+        /as.*before/i,
+        /don't.*change/i,
+        /stay.*same/i,
+        /^same$/i,
+        /^keep$/i,
+        /that's.*fine/i,
+        /^ok$/i
+      ];
+      
+      const wantsToKeep = keepSamePatterns.some(pattern => pattern.test(userMessage));
+      
+      if (wantsToKeep) {
+        setTimeout(() => {
+          setMessages(prev => [...prev, { 
+            role: "assistant", 
+            content: userName 
+              ? `Got it, ${userName}! We'll keep that as is.`
+              : "Got it! We'll keep that as is."
+          }]);
+          
+          setTimeout(() => {
+            setIsEditingField(false);
+            setCurrentQuestionIndex(questions.length);
+            generateConfirmationSummary();
+            setIsSending(false);
+          }, 600);
+        }, 400);
+        return;
+      }
+    }
+    
     // Validate input with AI
     const validation = await validateInput(userMessage, currentQuestion);
     
@@ -282,7 +321,15 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
       }]);
       
       setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
+        // If we're editing a field, go back to confirmation instead of continuing
+        if (isEditingField) {
+          setIsEditingField(false);
+          setCurrentQuestionIndex(questions.length);
+          // Trigger summary regeneration
+          generateConfirmationSummary();
+        } else {
+          setCurrentQuestionIndex(prev => prev + 1);
+        }
         setIsSending(false);
       }, 600);
     }, 400);
