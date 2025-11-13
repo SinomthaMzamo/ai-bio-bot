@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.validate-answer]
 verify_jwt = false
+
+[functions.summarize-info]
+verify_jwt = false
