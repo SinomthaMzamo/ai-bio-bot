@@ -4,6 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Send, Loader2, Edit2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: "assistant" | "user";
@@ -360,8 +361,7 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
         if (isEditingField) {
           setIsEditingField(false);
           setCurrentQuestionIndex(questions.length);
-          // Trigger summary regeneration
-          generateConfirmationSummary();
+          // useEffect will handle calling generateConfirmationSummary
         } else {
           setCurrentQuestionIndex(prev => prev + 1);
         }
@@ -390,7 +390,13 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
                     : "bg-muted"
                 }`}
               >
-                <p className="text-sm">{message.content}</p>
+                {message.role === "assistant" && message.content.includes("Does this look good") ? (
+                  <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                )}
               </Card>
             </div>
           ))}
