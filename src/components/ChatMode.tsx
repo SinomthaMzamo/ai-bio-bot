@@ -62,7 +62,7 @@ export const ChatMode = ({ contentType, onComplete, isGenerating = false }: Chat
   const questions = CHAT_QUESTIONS[contentType];
 
   useEffect(() => {
-    if (currentQuestionIndex < questions.length) {
+    if (currentQuestionIndex < questions.length && !isEditingField) {
       setTimeout(() => {
         askNextQuestion();
       }, 500);
