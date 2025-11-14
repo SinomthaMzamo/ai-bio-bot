@@ -19,7 +19,7 @@ const Landing = () => {
             </div>
             
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight">
-              Transform Your Ideas Into
+              Transform Your Story Into
               <span className="block mt-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                 Professional Content
               </span>
