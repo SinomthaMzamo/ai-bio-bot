@@ -189,13 +189,6 @@ We followed Agile principles throughout development:
 - **Iterative Progress**: Continuous delivery and refinement
 - **Collaborative Development**: Real-time collaboration using Lovable's shared workspace
 
-### Version Control
-
-- **Feature Branches**: Each feature developed in isolated branches
-- **Pull Requests**: Code review process before merging
-- **Commit History**: Clear, descriptive commit messages
-- **Main Branch**: Production-ready code
-
 ### Key Development Tasks
 
 - ✅ Designing effective prompts for AI generation
@@ -217,11 +210,6 @@ A collaborative effort by passionate developers committed to making professional
 ## 📚 Learning Outcomes
 
 ### Week 1 Project Goals Achieved
-
-✅ **Version Control Mastery**
-- Applied Git and GitHub for collaborative development
-- Managed feature branches and pull requests
-- Maintained clear commit history
 
 ✅ **Agile Workflow Implementation**
 - Set up and managed Kanban board
@@ -285,7 +273,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Lovable AI** for providing the AI API
 - **Supabase** for backend infrastructure
-- **Week 1 Instructors** for guidance and support
+- **Lwando Ntlemeza** for guidance and support
 - **Open Source Community** for tools and libraries
 
 ## 📞 Contact & Support
@@ -298,6 +286,6 @@ For questions, feedback, or support:
 
 ---
 
-**Built with ❤️ by Ctrl Alt Elite**
+**Built with ❤️ by Ctrl Alt Elite: Sinomtha Mzamo & Derek Gwekwerere**
 
 *Making professional self-presentation effortless through AI*
