@@ -36,7 +36,7 @@ const Landing = () => {
                 className="text-lg px-8 shadow-glow"
                 onClick={() => navigate("/auth")}
               >
-                Get Started For Free
+                Get Started
               </Button>
               <Button 
                 size="lg" 
